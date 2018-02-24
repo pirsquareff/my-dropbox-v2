@@ -133,7 +133,18 @@ public class myDropbox_v2_5730329521 {
                 }
             } else if (commandChunk[0].compareTo("share") == 0) {
                 Integer exitCode = 1;
-
+                try {
+                    // Todo: Handle a file name containing space characters.
+                    exitCode = share(mapper, commandChunk[1], commandChunk[2]);
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    System.err.println("share command requires at least 2 arguments. See command arguments below.");
+                    System.err.println("share <file-name> [username]");
+                }
+                if (exitCode != 0) {
+                    System.err.println("Fail to share a file.");
+                } else {
+                    System.out.println("OK");
+                }
             } else if (commandChunk[0].compareTo("logout") == 0) {
                 Integer exitCode = 1;
                 exitCode = logout(mapper);
@@ -326,6 +337,38 @@ public class myDropbox_v2_5730329521 {
         newFile.setOwner(currentUid);
         newFile.setSharedBy(sharedBy);
         mapper.save(newFile);
+        return 0;
+    }
+
+    /**
+     * Share a file with another user.
+     * @param {DynamoDBMapper} mapper - A DynamoDB mapper's object.
+     * @param {String} fileName - A file's name.
+     * @param {String} username - A username to share a file with.
+     * @return {Integer} An exit code.
+     */
+    private static Integer share(DynamoDBMapper mapper, String fileName, String username) {
+        // Check username's existence
+        if (!isUsernameExist(mapper, username)) {
+            System.err.println("Username '" + username + "' does not exist.");
+            return 1;
+        }
+
+        // Retrieve a file record
+        String keyName = currentUid + "/" + fileName;
+        FileRecord fileRecordRetrieved = mapper.load(FileRecord.class, keyName);
+
+        // Retrieve a user to get UID
+        User userRetrieved = mapper.load(User.class, username);
+        String uid = userRetrieved.getUid();
+
+        // Add UID to sharedBy StringSet
+        Set<String> sharedBy = fileRecordRetrieved.getSharedBy();
+        sharedBy.add(uid);
+
+        // Update the file record
+        fileRecordRetrieved.setSharedBy(sharedBy);
+        mapper.save(fileRecordRetrieved);
         return 0;
     }
 
