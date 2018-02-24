@@ -11,6 +11,8 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.amazonaws.services.s3.transfer.model.UploadResult;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
@@ -96,7 +98,7 @@ public class myDropbox_v2_5730329521 {
                 try {
                     // Handle a file name containing space characters.
                     String filePath = command.split(" ", 2)[1];
-                    exitCode = put(filePath);
+                    exitCode = put(mapper, filePath);
                 } catch (ArrayIndexOutOfBoundsException e) {
                     System.err.println("put command requires at least 1 argument. See command arguments below.");
                     System.err.println("put <file-path>");
@@ -126,7 +128,12 @@ public class myDropbox_v2_5730329521 {
                 exitCode = view();
                 if (exitCode != 0) {
                     System.err.println("Fail to view files.");
+                } else {
+                    System.out.println("OK");
                 }
+            } else if (commandChunk[0].compareTo("share") == 0) {
+                Integer exitCode = 1;
+
             } else if (commandChunk[0].compareTo("logout") == 0) {
                 Integer exitCode = 1;
                 exitCode = logout(mapper);
@@ -149,6 +156,14 @@ public class myDropbox_v2_5730329521 {
                 "See you again!\n");
     }
 
+    /**
+     * Create a new user.
+     * @param {DynamoDBMapper} mapper - A DynamoDB mapper's object.
+     * @param {String} username - A username.
+     * @param {String} password - A password.
+     * @param {String} confirmPassword - A retyped password.
+     * @return {Integer} An exit code.
+     */
     private static Integer createNewUser(DynamoDBMapper mapper, String username, String password, String confirmPassword) {
         // Password validation
         if (password.compareTo(confirmPassword) != 0) {
@@ -210,6 +225,13 @@ public class myDropbox_v2_5730329521 {
         return 0;
     }
 
+    /**
+     * Login.
+     * @param {DynamoDBMapper} mapper - A DynamoDB mapper's object.
+     * @param {String} username - A username.
+     * @param {String} password - A password.
+     * @return {Integer} An exit code.
+     */
     private static Integer login(DynamoDBMapper mapper, String username, String password) {
         // If there is another user currently logged in, skip this log in process
         if (currentUser != null) {
@@ -252,7 +274,13 @@ public class myDropbox_v2_5730329521 {
         return 0;
     }
 
-    private static Integer put(String filePath) {
+    /**
+     * Put a file to myDropbox.
+     * @param {DynamoDBMapper} mapper - A DynamoDB mapper's object.
+     * @param {String} filePath - A relative or absolute file path.
+     * @return {Integer} An exit code.
+     */
+    private static Integer put(DynamoDBMapper mapper, String filePath) {
         if (!isLoggedIn()) {
             System.err.println("You are not logged in. Please login and then try again.");
             return 1;
@@ -265,12 +293,22 @@ public class myDropbox_v2_5730329521 {
 
         File f = new File(filePath);
         String keyName = currentUid + '/' + f.getName();
-        Upload upload = tm.upload(bucketName, keyName, new File(filePath));
+
+        PutObjectRequest request = new PutObjectRequest(bucketName, keyName, new File(filePath));
+
+        // Show progress
+//        request.setGeneralProgressListener(
+//                (progressEvent) ->
+//                        System.out.println("Transferred bytes: " + progressEvent.getBytesTransferred())
+//        );
+
+        Upload upload = tm.upload(request);
+        UploadResult uploadResult;
 
         // Use TransferManager to upload file to S3
         try {
             // Block and wait for the upload to finish
-            upload.waitForCompletion();
+            uploadResult = upload.waitForUploadResult();
         } catch (AmazonClientException ace) {
             System.err.println(ace.getMessage());
             return 1;
@@ -278,6 +316,16 @@ public class myDropbox_v2_5730329521 {
             System.err.println(e.getMessage());
             return 1;
         }
+
+        // Add file metadata to the database
+        Set<String> sharedBy = new HashSet<>();
+        sharedBy.add(currentUid);
+
+        FileRecord newFile = new FileRecord();
+        newFile.setKeyName(uploadResult.getKey());
+        newFile.setOwner(currentUid);
+        newFile.setSharedBy(sharedBy);
+        mapper.save(newFile);
         return 0;
     }
 
@@ -286,8 +334,6 @@ public class myDropbox_v2_5730329521 {
             System.err.println("You are not logged in. Please login and then try again.");
             return 1;
         }
-
-        System.out.println("OK");
 
         try {
             final ListObjectsV2Request req = new ListObjectsV2Request()
