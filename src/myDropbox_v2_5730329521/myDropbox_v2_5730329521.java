@@ -355,26 +355,26 @@ public class myDropbox_v2_5730329521 {
         }
 
         // Check whether it has already in the database
-        FileRecord newFile = null;
+        FileRecord newFileRecord = null;
         try {
-            newFile = mapper.load(FileRecord.class, uploadedKeyName);
+            newFileRecord = mapper.load(FileRecord.class, uploadedKeyName);
         } catch (Exception e) {
             System.err.println(e.getMessage());
             return 1;
         }
 
         // Create new
-        if (newFile == null) {
-            newFile = new FileRecord();
-            newFile.setKeyName(uploadResult.getKey());
+        if (newFileRecord == null) {
+            newFileRecord = new FileRecord();
+            newFileRecord.setKeyName(uploadResult.getKey());
         }
 
-        newFile.setOwner(currentUid);
-        newFile.setFileSize(fileSize);
-        newFile.setLastModifiedTime(formattedLastModifiedTime);
+        newFileRecord.setOwner(currentUid);
+        newFileRecord.setFileSize(fileSize);
+        newFileRecord.setLastModifiedTime(formattedLastModifiedTime);
 
         // Add file metadata to the database
-        mapper.save(newFile);
+        mapper.save(newFileRecord);
         return 0;
     }
 
