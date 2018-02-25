@@ -11,6 +11,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBScanExpression;
 import com.amazonaws.services.s3.transfer.model.UploadResult;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
@@ -125,7 +126,7 @@ public class myDropbox_v2_5730329521 {
                 }
             } else if (commandChunk[0].compareTo("view") == 0) {
                 Integer exitCode = 1;
-                exitCode = view();
+                exitCode = view(mapper);
                 if (exitCode != 0) {
                     System.err.println("Fail to view files.");
                 } else {
@@ -308,10 +309,10 @@ public class myDropbox_v2_5730329521 {
         PutObjectRequest request = new PutObjectRequest(bucketName, keyName, new File(filePath));
 
         // Show progress
-//        request.setGeneralProgressListener(
-//                (progressEvent) ->
-//                        System.out.println("Transferred bytes: " + progressEvent.getBytesTransferred())
-//        );
+        // request.setGeneralProgressListener(
+        //         (progressEvent) ->
+        //                 System.out.println("Transferred bytes: " + progressEvent.getBytesTransferred())
+        // );
 
         Upload upload = tm.upload(request);
         UploadResult uploadResult;
@@ -328,14 +329,51 @@ public class myDropbox_v2_5730329521 {
             return 1;
         }
 
-        // Add file metadata to the database
-        Set<String> sharedBy = new HashSet<>();
-        sharedBy.add(currentUid);
+        // Todo: Implement rolling back when a failure is occurred
+        // Get uploaded object's data
+        String uploadedKeyName = uploadResult.getKey();
+        Long fileSize;
+        String formattedLastModifiedTime;
+        try {
+            final ListObjectsV2Request req = new ListObjectsV2Request()
+                    .withBucketName(bucketName)
+                    .withPrefix(uploadedKeyName)
+                    .withMaxKeys(1);
+            ListObjectsV2Result result = s3Client.listObjectsV2(req);
+            S3ObjectSummary objectSummary = result.getObjectSummaries().get(0);
 
-        FileRecord newFile = new FileRecord();
-        newFile.setKeyName(uploadResult.getKey());
+            fileSize = objectSummary.getSize();
+
+            Date lastModifiedTime = objectSummary.getLastModified();
+            formattedLastModifiedTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssXXX").format(lastModifiedTime);
+        } catch (AmazonServiceException ase) {
+            System.err.println(ase.getMessage());
+            return 1;
+        } catch (AmazonClientException ace) {
+            System.err.println(ace.getMessage());
+            return 1;
+        }
+
+        // Check whether it has already in the database
+        FileRecord newFile = null;
+        try {
+            newFile = mapper.load(FileRecord.class, uploadedKeyName);
+        } catch (Exception e) {
+            System.err.println(e.getMessage());
+            return 1;
+        }
+
+        // Create new
+        if (newFile == null) {
+            newFile = new FileRecord();
+            newFile.setKeyName(uploadResult.getKey());
+        }
+
         newFile.setOwner(currentUid);
-        newFile.setSharedBy(sharedBy);
+        newFile.setFileSize(fileSize);
+        newFile.setLastModifiedTime(formattedLastModifiedTime);
+
+        // Add file metadata to the database
         mapper.save(newFile);
         return 0;
     }
@@ -364,6 +402,9 @@ public class myDropbox_v2_5730329521 {
 
         // Add UID to sharedBy StringSet
         Set<String> sharedBy = fileRecordRetrieved.getSharedBy();
+        if (sharedBy == null) {
+            sharedBy = new HashSet<>();
+        }
         sharedBy.add(uid);
 
         // Update the file record
@@ -372,37 +413,56 @@ public class myDropbox_v2_5730329521 {
         return 0;
     }
 
-    private static Integer view() {
+    private static Integer view(DynamoDBMapper mapper) {
         if (!isLoggedIn()) {
             System.err.println("You are not logged in. Please login and then try again.");
             return 1;
         }
 
-        try {
-            final ListObjectsV2Request req = new ListObjectsV2Request()
-                    .withBucketName(bucketName)
-                    .withPrefix(currentUid)
-                    .withMaxKeys(2);
-            ListObjectsV2Result result;
+//        try {
+//            final ListObjectsV2Request req = new ListObjectsV2Request()
+//                    .withBucketName(bucketName)
+//                    .withPrefix(currentUid)
+//                    .withMaxKeys(2);
+//            ListObjectsV2Result result;
+//
+//            do {
+//                result = s3Client.listObjectsV2(req);
+//                for (S3ObjectSummary objectSummary : result.getObjectSummaries()) {
+//                    String fileName = objectSummary.getKey().split("/", 2)[1];
+//                    Long fileSize = objectSummary.getSize();
+//                    Date lastModifiedTime = objectSummary.getLastModified();
+//                    String formattedLastModifiedTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssXXX").format(lastModifiedTime);
+//                    System.out.println(fileName + " " + fileSize + " " + formattedLastModifiedTime);
+//                }
+//                req.setContinuationToken(result.getNextContinuationToken());
+//            } while (result.isTruncated() == true);
+//        } catch (AmazonServiceException ase) {
+//            System.err.println(ase.getMessage());
+//            return 1;
+//        } catch (AmazonClientException ace) {
+//            System.err.println(ace.getMessage());
+//            return 1;
+//        }
 
-            do {
-                result = s3Client.listObjectsV2(req);
-                for (S3ObjectSummary objectSummary : result.getObjectSummaries()) {
-                    String fileName = objectSummary.getKey().split("/", 2)[1];
-                    Long fileSize = objectSummary.getSize();
-                    Date lastModifiedTime = objectSummary.getLastModified();
-                    String formattedLastModifiedTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssXXX").format(lastModifiedTime);
-                    System.out.println(fileName + " " + fileSize + " " + formattedLastModifiedTime);
-                }
-                req.setContinuationToken(result.getNextContinuationToken());
-            } while (result.isTruncated() == true);
-        } catch (AmazonServiceException ase) {
-            System.err.println(ase.getMessage());
-            return 1;
-        } catch (AmazonClientException ace) {
-            System.err.println(ace.getMessage());
-            return 1;
+
+        Map<String, AttributeValue> eav = new HashMap<>();
+        eav.put(":val1", new AttributeValue().withS(currentUid));
+
+        Map<String, String> ean = new HashMap<>();
+        ean.put("#o", "owner");
+
+        DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
+                .withFilterExpression("#o = :val1 or contains(shared_by, :val1)")
+                .withExpressionAttributeNames(ean)
+                .withExpressionAttributeValues(eav);
+
+        List<FileRecord> scanResult = mapper.scan(FileRecord.class, scanExpression);
+
+        for (FileRecord file : scanResult) {
+            System.out.println(file.getKeyName());
         }
+
         return 0;
     }
 

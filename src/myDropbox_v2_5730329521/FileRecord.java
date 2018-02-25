@@ -11,6 +11,8 @@ public class FileRecord {
     private String keyName;
     private String owner;
     private Set<String> sharedBy;
+    private Long fileSize;
+    private String lastModifiedTime;
 
     @DynamoDBHashKey(attributeName = "key_name")
     public String getKeyName() {
@@ -35,4 +37,12 @@ public class FileRecord {
     public void setSharedBy(Set<String> sharedBy) {
         this.sharedBy = sharedBy;
     }
+
+    @DynamoDBAttribute(attributeName = "file_size")
+    public Long getFileSize() { return fileSize; }
+    public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+
+    @DynamoDBAttribute(attributeName = "last_modified_time")
+    public String getLastModifiedTime() { return lastModifiedTime; }
+    public void setLastModifiedTime(String lastModifiedTime) { this.lastModifiedTime = lastModifiedTime; }
 }
