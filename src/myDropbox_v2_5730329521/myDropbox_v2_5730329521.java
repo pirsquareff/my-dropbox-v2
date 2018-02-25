@@ -46,9 +46,6 @@ public class myDropbox_v2_5730329521 {
 
     static String bucketName = "mydropbox-storage";
 
-    static final Pattern VALID_EMAIL_ADDRESS_REGEX =
-            Pattern.compile("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,6}$", Pattern.CASE_INSENSITIVE);
-
     private static String currentUser = null;
     private static String currentUid = null;
 
@@ -99,7 +96,7 @@ public class myDropbox_v2_5730329521 {
             } else if (commandChunk[0].compareTo("put") == 0) {
                 Integer exitCode = 1;
                 try {
-                    // Handle a file name containing space characters.
+                    // Handle a file's name containing space characters.
                     String filePath = command.split(" ", 2)[1];
                     exitCode = put(mapper, filePath);
                 } catch (ArrayIndexOutOfBoundsException e) {
@@ -114,13 +111,20 @@ public class myDropbox_v2_5730329521 {
             } else if (commandChunk[0].compareTo("get") == 0) {
                 Integer exitCode = 1;
                 try {
-                    // Todo: Handle a file name containing space characters.
-                    String fileName = command.split(" ", 2)[1];
-                    String ownerUsername = null;
-                    if (commandChunk.length > 2) {
-                        ownerUsername = commandChunk[2];
+                    // Handle a file's name containing space characters.
+                    String fileName;
+                    String ownerUsername;
+                    if (commandChunk.length > 2 && isEmailValid(commandChunk[commandChunk.length - 1])) {
+                        ownerUsername = commandChunk[commandChunk.length - 1];
+                        int firstSpaceIndex = command.indexOf(" ");
+                        int lastSpaceIndex = command.lastIndexOf(" ");
+                        fileName = command.substring(firstSpaceIndex + 1, lastSpaceIndex);
+                    } else {
+                        // If owner's username is not given, set to current user by default
+                        ownerUsername = currentUser;
+                        fileName = command.split(" ", 2)[1];
                     }
-                    exitCode = get(mapper, commandChunk[1], ownerUsername);
+                    exitCode = get(mapper, fileName, ownerUsername);
                 } catch (ArrayIndexOutOfBoundsException e) {
                     System.err.println("get command requires at least 1 argument. See command arguments below.");
                     System.err.println("get <file-name>");
@@ -141,8 +145,12 @@ public class myDropbox_v2_5730329521 {
             } else if (commandChunk[0].compareTo("share") == 0) {
                 Integer exitCode = 1;
                 try {
-                    // Todo: Handle a file name containing space characters.
-                    exitCode = share(mapper, commandChunk[1], commandChunk[2]);
+                    // Handle a file's name containing space characters.
+                    int firstSpaceIndex = command.indexOf(" ");
+                    int lastSpaceIndex = command.lastIndexOf(" ");
+                    String fileName = command.substring(firstSpaceIndex + 1, lastSpaceIndex);
+                    String username = commandChunk[commandChunk.length - 1];
+                    exitCode = share(mapper, fileName, username);
                 } catch (ArrayIndexOutOfBoundsException e) {
                     System.err.println("share command requires at least 2 arguments. See command arguments below.");
                     System.err.println("share <file-name> [username]");
@@ -191,8 +199,7 @@ public class myDropbox_v2_5730329521 {
         }
 
         // Username validation
-        Matcher matcher = VALID_EMAIL_ADDRESS_REGEX.matcher(username);
-        if (!matcher.find()) {
+        if (!isEmailValid(username)) {
             System.err.println("Username '" + username + "' is invalid. It should be your email address.");
             return 1;
         }
@@ -361,6 +368,9 @@ public class myDropbox_v2_5730329521 {
         } catch (AmazonClientException ace) {
             System.err.println(ace.getMessage());
             return 1;
+        } catch (IndexOutOfBoundsException e) {
+            System.err.println(e.getMessage());
+            return 1;
         }
 
         // Check whether it has already in the database
@@ -396,9 +406,13 @@ public class myDropbox_v2_5730329521 {
      * @return {Integer} An exit code.
      */
     private static Integer share(DynamoDBMapper mapper, String fileName, String username) {
-        // Todo: Avoid share with owner
         if (!isLoggedIn()) {
             System.err.println("You are not logged in. Please login and then try again.");
+            return 1;
+        }
+
+        if (username.compareTo(currentUser) == 0) {
+            System.err.println("You already have an access to this file.");
             return 1;
         }
 
@@ -412,9 +426,18 @@ public class myDropbox_v2_5730329521 {
         String keyName = currentUid + "/" + fileName;
         FileRecord fileRecordRetrieved = mapper.load(FileRecord.class, keyName);
 
-        // Retrieve a user to get UID
-        User userRetrieved = mapper.load(User.class, username);
-        String uid = userRetrieved.getUid();
+        // Prevent sharing a file which a current user does not own
+        if (fileRecordRetrieved == null) {
+            System.err.println("You are not the owner of this file.");
+            return 1;
+        }
+
+        // Get UID
+        String uid = getUidByUsername(mapper, username);
+        if (uid.compareTo("UID Not Found") == 0) {
+            System.err.println("Username '" + username + "' does not exist.");
+            return 1;
+        }
 
         // Add UID to sharedBy StringSet
         Set<String> sharedBy = fileRecordRetrieved.getSharedBy();
@@ -490,9 +513,8 @@ public class myDropbox_v2_5730329521 {
             return 1;
         }
 
-        // If owner's username is not set, set to current user by default
         String ownerUid = currentUid;
-        if (ownerUsername != null) {
+        if (ownerUsername.compareTo(currentUser) != 0) {
             ownerUid = getUidByUsername(mapper, ownerUsername);
         }
 
@@ -521,7 +543,14 @@ public class myDropbox_v2_5730329521 {
         }
 
         List<FileRecord> scanResult = mapper.scan(FileRecord.class, scanExpression);
-        String keyName = scanResult.get(0).getKeyName();
+        String keyName;
+
+        try {
+            keyName = scanResult.get(0).getKeyName();
+        } catch (IndexOutOfBoundsException e) {
+            System.err.println("A file '" + fileName + "' whose owner is '" + ownerUsername + "' does not exist.");
+            return 1;
+        }
 
         try {
             S3Object o = s3Client.getObject(bucketName, keyName);
@@ -535,7 +564,7 @@ public class myDropbox_v2_5730329521 {
             s3is.close();
             fos.close();
         } catch (AmazonServiceException e) {
-            System.err.println(e.getErrorMessage());
+            System.err.println(e.getMessage());
             return 1;
         } catch (FileNotFoundException e) {
             System.err.println(e.getMessage());
@@ -635,6 +664,17 @@ public class myDropbox_v2_5730329521 {
         if (currentUser == null) {
             return false;
         }
+        return true;
+    }
+
+    private static Boolean isEmailValid(String email) {
+        Pattern VALID_EMAIL_ADDRESS_REGEX =
+                Pattern.compile("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,6}$", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = VALID_EMAIL_ADDRESS_REGEX.matcher(email);
+        if (!matcher.find()) {
+            return false;
+        }
+
         return true;
     }
 }
