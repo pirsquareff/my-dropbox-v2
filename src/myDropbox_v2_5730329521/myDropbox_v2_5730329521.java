@@ -52,6 +52,8 @@ public class myDropbox_v2_5730329521 {
     private static String currentUser = null;
     private static String currentUid = null;
 
+    private static HashMap<String, String> cachedUidToUsername = new HashMap<>();
+
     public static void main(String[] args) {
         DynamoDBMapper mapper = new DynamoDBMapper(dynamoDBclient);
 
@@ -112,9 +114,13 @@ public class myDropbox_v2_5730329521 {
             } else if (commandChunk[0].compareTo("get") == 0) {
                 Integer exitCode = 1;
                 try {
-                    // Handle a file name containing space characters.
+                    // Todo: Handle a file name containing space characters.
                     String fileName = command.split(" ", 2)[1];
-                    exitCode = get(fileName);
+                    String ownerUsername = null;
+                    if (commandChunk.length > 2) {
+                        ownerUsername = commandChunk[2];
+                    }
+                    exitCode = get(mapper, commandChunk[1], ownerUsername);
                 } catch (ArrayIndexOutOfBoundsException e) {
                     System.err.println("get command requires at least 1 argument. See command arguments below.");
                     System.err.println("get <file-name>");
@@ -148,7 +154,7 @@ public class myDropbox_v2_5730329521 {
                 }
             } else if (commandChunk[0].compareTo("logout") == 0) {
                 Integer exitCode = 1;
-                exitCode = logout(mapper);
+                exitCode = logout();
                 if (exitCode != 0) {
                     System.err.println("Fail to logout.");
                 } else {
@@ -170,10 +176,11 @@ public class myDropbox_v2_5730329521 {
 
     /**
      * Create a new user.
+     *
      * @param {DynamoDBMapper} mapper - A DynamoDB mapper's object.
-     * @param {String} username - A username.
-     * @param {String} password - A password.
-     * @param {String} confirmPassword - A retyped password.
+     * @param {String}         username - A username.
+     * @param {String}         password - A password.
+     * @param {String}         confirmPassword - A retyped password.
      * @return {Integer} An exit code.
      */
     private static Integer createNewUser(DynamoDBMapper mapper, String username, String password, String confirmPassword) {
@@ -239,9 +246,10 @@ public class myDropbox_v2_5730329521 {
 
     /**
      * Login.
+     *
      * @param {DynamoDBMapper} mapper - A DynamoDB mapper's object.
-     * @param {String} username - A username.
-     * @param {String} password - A password.
+     * @param {String}         username - A username.
+     * @param {String}         password - A password.
      * @return {Integer} An exit code.
      */
     private static Integer login(DynamoDBMapper mapper, String username, String password) {
@@ -288,8 +296,9 @@ public class myDropbox_v2_5730329521 {
 
     /**
      * Put a file to myDropbox.
+     *
      * @param {DynamoDBMapper} mapper - A DynamoDB mapper's object.
-     * @param {String} filePath - A relative or absolute file path.
+     * @param {String}         filePath - A relative or absolute file path.
      * @return {Integer} An exit code.
      */
     private static Integer put(DynamoDBMapper mapper, String filePath) {
@@ -380,12 +389,19 @@ public class myDropbox_v2_5730329521 {
 
     /**
      * Share a file with another user.
+     *
      * @param {DynamoDBMapper} mapper - A DynamoDB mapper's object.
-     * @param {String} fileName - A file's name.
-     * @param {String} username - A username to share a file with.
+     * @param {String}         fileName - A file's name.
+     * @param {String}         username - A username to share a file with.
      * @return {Integer} An exit code.
      */
     private static Integer share(DynamoDBMapper mapper, String fileName, String username) {
+        // Todo: Avoid share with owner
+        if (!isLoggedIn()) {
+            System.err.println("You are not logged in. Please login and then try again.");
+            return 1;
+        }
+
         // Check username's existence
         if (!isUsernameExist(mapper, username)) {
             System.err.println("Username '" + username + "' does not exist.");
@@ -413,38 +429,17 @@ public class myDropbox_v2_5730329521 {
         return 0;
     }
 
+    /**
+     * View files owned by or shared with a current user.
+     *
+     * @param {DynamoDBMapper} mapper - A DynamoDB mapper's object.
+     * @return {Integer} An exit code.
+     */
     private static Integer view(DynamoDBMapper mapper) {
         if (!isLoggedIn()) {
             System.err.println("You are not logged in. Please login and then try again.");
             return 1;
         }
-
-//        try {
-//            final ListObjectsV2Request req = new ListObjectsV2Request()
-//                    .withBucketName(bucketName)
-//                    .withPrefix(currentUid)
-//                    .withMaxKeys(2);
-//            ListObjectsV2Result result;
-//
-//            do {
-//                result = s3Client.listObjectsV2(req);
-//                for (S3ObjectSummary objectSummary : result.getObjectSummaries()) {
-//                    String fileName = objectSummary.getKey().split("/", 2)[1];
-//                    Long fileSize = objectSummary.getSize();
-//                    Date lastModifiedTime = objectSummary.getLastModified();
-//                    String formattedLastModifiedTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssXXX").format(lastModifiedTime);
-//                    System.out.println(fileName + " " + fileSize + " " + formattedLastModifiedTime);
-//                }
-//                req.setContinuationToken(result.getNextContinuationToken());
-//            } while (result.isTruncated() == true);
-//        } catch (AmazonServiceException ase) {
-//            System.err.println(ase.getMessage());
-//            return 1;
-//        } catch (AmazonClientException ace) {
-//            System.err.println(ace.getMessage());
-//            return 1;
-//        }
-
 
         Map<String, AttributeValue> eav = new HashMap<>();
         eav.put(":val1", new AttributeValue().withS(currentUid));
@@ -460,20 +455,75 @@ public class myDropbox_v2_5730329521 {
         List<FileRecord> scanResult = mapper.scan(FileRecord.class, scanExpression);
 
         for (FileRecord file : scanResult) {
-            System.out.println(file.getKeyName());
+            String fileName = file.getKeyName().split("/", 2)[1];
+            Long fileSize = file.getFileSize();
+            String lastModifiedTime = file.getLastModifiedTime();
+            String ownerUid = file.getOwner();
+
+            // Get username from cache first
+            String ownerUsername = cachedUidToUsername.get(ownerUid);
+            // It does not exist in cache, get from the database instead
+            if (ownerUsername == null) {
+                ownerUsername = getUsernameByUid(mapper, ownerUid);
+                if (ownerUsername.compareTo("UID Not Found") == 0) {
+                    System.err.println("Oops, something went wrong!");
+                    return 1;
+                }
+            }
+            System.out.println(fileName + " " + fileSize + " " + lastModifiedTime + " " + ownerUsername);
         }
 
         return 0;
     }
 
-    private static Integer get(String fileName) {
+    /**
+     * Get a file.
+     *
+     * @param {DynamoDBMapper} mapper - A DynamoDB mapper's object.
+     * @param {String}         fileName - A file's name.
+     * @param {String}         ownerUsername - An owner's username.
+     * @return {Integer} An exit code.
+     */
+    private static Integer get(DynamoDBMapper mapper, String fileName, String ownerUsername) {
         if (!isLoggedIn()) {
             System.err.println("You are not logged in. Please login and then try again.");
             return 1;
         }
 
+        // If owner's username is not set, set to current user by default
+        String ownerUid = currentUid;
+        if (ownerUsername != null) {
+            ownerUid = getUidByUsername(mapper, ownerUsername);
+        }
+
+        Map<String, AttributeValue> eav = new HashMap<>();
+
+        // 'owner' is a preserved word in Filter Expression
+        Map<String, String> ean = new HashMap<>();
+        ean.put("#o", "owner");
+
+        DynamoDBScanExpression scanExpression;
+        if (ownerUsername == null || ownerUsername.compareTo(currentUser) == 0) {
+            eav.put(":val1", new AttributeValue().withS(ownerUid));
+            eav.put(":val2", new AttributeValue().withS(fileName));
+            scanExpression = new DynamoDBScanExpression()
+                    .withFilterExpression("contains(key_name, :val2) and #o = :val1")
+                    .withExpressionAttributeNames(ean)
+                    .withExpressionAttributeValues(eav);
+        } else {
+            eav.put(":val1", new AttributeValue().withS(ownerUid));
+            eav.put(":val2", new AttributeValue().withS(fileName));
+            eav.put(":val3", new AttributeValue().withS(currentUid));
+            scanExpression = new DynamoDBScanExpression()
+                    .withFilterExpression("contains(key_name, :val2) and #o = :val1 and contains(shared_by, :val3)")
+                    .withExpressionAttributeNames(ean)
+                    .withExpressionAttributeValues(eav);
+        }
+
+        List<FileRecord> scanResult = mapper.scan(FileRecord.class, scanExpression);
+        String keyName = scanResult.get(0).getKeyName();
+
         try {
-            String keyName = currentUid + "/" + fileName;
             S3Object o = s3Client.getObject(bucketName, keyName);
             S3ObjectInputStream s3is = o.getObjectContent();
             FileOutputStream fos = new FileOutputStream(new File(fileName));
@@ -497,7 +547,12 @@ public class myDropbox_v2_5730329521 {
         return 0;
     }
 
-    private static Integer logout(DynamoDBMapper mapper) {
+    /**
+     * Log out
+     *
+     * @return {Integer} An exit code.
+     */
+    private static Integer logout() {
         // If there is no user currently logged in, skip this log out process
         if (currentUser == null) {
             currentUid = null;
@@ -540,6 +595,40 @@ public class myDropbox_v2_5730329521 {
             return false;
         }
         return true;
+    }
+
+    private static String getUsernameByUid(DynamoDBMapper mapper, String uid) {
+        Map<String, AttributeValue> eav = new HashMap<>();
+        eav.put(":val1", new AttributeValue().withS(uid));
+
+        DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
+                .withFilterExpression("uid = :val1")
+                .withExpressionAttributeValues(eav);
+
+        List<User> scanResult = mapper.scan(User.class, scanExpression);
+
+        if (scanResult.isEmpty()) {
+            return "UID Not Found";
+        }
+
+        return scanResult.get(0).getUsername();
+    }
+
+    private static String getUidByUsername(DynamoDBMapper mapper, String username) {
+        Map<String, AttributeValue> eav = new HashMap<>();
+        eav.put(":val1", new AttributeValue().withS(username));
+
+        DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
+                .withFilterExpression("username = :val1")
+                .withExpressionAttributeValues(eav);
+
+        List<User> scanResult = mapper.scan(User.class, scanExpression);
+
+        if (scanResult.isEmpty()) {
+            return "Username Not Found";
+        }
+
+        return scanResult.get(0).getUid();
     }
 
     private static Boolean isLoggedIn() {
