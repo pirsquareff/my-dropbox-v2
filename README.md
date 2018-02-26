@@ -15,9 +15,7 @@
 
 ### Amazon Web Service
 
-1. Create a table in Amazon DynamoDB named `myDropboxUsers` and set `username` attribute as a primary partition key. 
-    
-    An example instance of `myDropboxUsers` table is shown as follows:
+1. Create a table in Amazon DynamoDB named `myDropboxUsers` and set `username` attribute as a primary partition key. An example instance of `myDropboxUsers` table is shown as follows:
     
     | username | password | uid |
     |----------------|-------------------------------------------------------------------------------------------|----------------------------------|
@@ -25,9 +23,7 @@
     | alice@mail.com | NAc+HYrDudwQaZcRg817PRxqjF/3GEo0kHayPOwL5ZU=$QFtw0X5aHxPmItmB6l+DwMM7pAo0/qN7xplbFawUxHc= | 7BAE794AE414A192DA370A24B80CD55A |
     | john@mail.com | u9xLkE4bgNAAs16SCJAiHazrW6agDCPu8UacX6sYnAU=$tm2cWwCaiboKG6oM1pwdbuoexkwiwYH0Kl65gcuOaXM= | 4CF38BD6AC1546139696F852BB3625CA |
 
-2. Create a table in Amazon DynamoDB named `myDropboxFiles` and set `key_name` attribute as a primary partition key. 
-    
-    An example instance of `myDropboxFiles` table is shown as follows:
+2. Create a table in Amazon DynamoDB named `myDropboxFiles` and set `key_name` attribute as a primary partition key. An example instance of `myDropboxFiles` table is shown as follows:
 
     | key_name | version_id | owner | shared_by | file_size | last_modified_time |
     |-----------------------------|----------------------------------|----------------------------------|----------------------------------------------------------------------------|-----------|--------------------|
