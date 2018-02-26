@@ -44,6 +44,7 @@ public class myDropbox_v2_5730329521 {
             .withRegion("ap-southeast-1")
             .build();
 
+    // TODO: CHANGE ME
     static String bucketName = "mydropbox-storage";
 
     private static String currentUser = null;
@@ -345,7 +346,7 @@ public class myDropbox_v2_5730329521 {
             return 1;
         }
 
-        // Get uploaded object's data
+        // Get uploaded object's data from S3 to be later kept in the database
         String uploadedKeyName = uploadResult.getKey();
         String uploadedVersionId = uploadResult.getVersionId();
         Long fileSize;
@@ -361,23 +362,23 @@ public class myDropbox_v2_5730329521 {
             Date lastModifiedTime = objectSummary.getLastModified();
             lastModifiedTimeMs = new Long(lastModifiedTime.getTime());
         } catch (AmazonServiceException ase) {
-            // Roll back
+            // Before terminating, roll back by deleting the uploaded object in S3
             deleteObject(uploadedKeyName, uploadedVersionId);
             System.err.println(ase.getMessage());
             return 1;
         } catch (AmazonClientException ace) {
-            // Roll back
+            // Before terminating, roll back by deleting the uploaded object in S3
             deleteObject(uploadedKeyName, uploadedVersionId);
             System.err.println(ace.getMessage());
             return 1;
         } catch (IndexOutOfBoundsException e) {
-            // Roll back
+            // Before terminating, roll back by deleting the uploaded object in S3
             deleteObject(uploadedKeyName, uploadedVersionId);
             System.err.println(e.getMessage());
             return 1;
         }
 
-        // Check whether it has already in the database
+        // Check whether the file record has already in the database (update an existing file)
         FileRecord newFileRecord = null;
         try {
             newFileRecord = mapper.load(FileRecord.class, uploadedKeyName);
@@ -388,7 +389,7 @@ public class myDropbox_v2_5730329521 {
             return 1;
         }
 
-        // Create new
+        // Create a new file record
         if (newFileRecord == null) {
             newFileRecord = new FileRecord();
             newFileRecord.setKeyName(uploadedKeyName);
@@ -399,7 +400,7 @@ public class myDropbox_v2_5730329521 {
         newFileRecord.setFileSize(fileSize);
         newFileRecord.setLastModifiedTime(lastModifiedTimeMs);
 
-        // Add file metadata to the database
+        // Add the file record to the database
         mapper.save(newFileRecord);
         return 0;
     }
@@ -540,7 +541,8 @@ public class myDropbox_v2_5730329521 {
             scanExpression = new DynamoDBScanExpression()
                     .withFilterExpression("contains(key_name, :val2) and #o = :val1")
                     .withExpressionAttributeNames(ean)
-                    .withExpressionAttributeValues(eav);
+                    .withExpressionAttributeValues(eav)
+                    .withConsistentRead(true);
         } else {
             eav.put(":val1", new AttributeValue().withS(ownerUid));
             eav.put(":val2", new AttributeValue().withS(fileName));
@@ -548,7 +550,8 @@ public class myDropbox_v2_5730329521 {
             scanExpression = new DynamoDBScanExpression()
                     .withFilterExpression("contains(key_name, :val2) and #o = :val1 and contains(shared_by, :val3)")
                     .withExpressionAttributeNames(ean)
-                    .withExpressionAttributeValues(eav);
+                    .withExpressionAttributeValues(eav)
+                    .withConsistentRead(true);
         }
 
         List<FileRecord> scanResult = mapper.scan(FileRecord.class, scanExpression);
@@ -609,6 +612,9 @@ public class myDropbox_v2_5730329521 {
 
         currentUser = null;
         currentUid = null;
+
+        // Clear UID to username hash
+        cachedUidToUsername.clear();
         return 0;
     }
 
