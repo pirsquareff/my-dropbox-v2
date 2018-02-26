@@ -345,11 +345,11 @@ public class myDropbox_v2_5730329521 {
             return 1;
         }
 
-        // Todo: Implement rolling back when a failure is occurred
         // Get uploaded object's data
         String uploadedKeyName = uploadResult.getKey();
+        String uploadedVersionId = uploadResult.getVersionId();
         Long fileSize;
-        String formattedLastModifiedTime;
+        Long lastModifiedTimeMs;
         try {
             final ListObjectsV2Request req = new ListObjectsV2Request()
                     .withBucketName(bucketName)
@@ -357,18 +357,22 @@ public class myDropbox_v2_5730329521 {
                     .withMaxKeys(1);
             ListObjectsV2Result result = s3Client.listObjectsV2(req);
             S3ObjectSummary objectSummary = result.getObjectSummaries().get(0);
-
             fileSize = objectSummary.getSize();
-
             Date lastModifiedTime = objectSummary.getLastModified();
-            formattedLastModifiedTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssXXX").format(lastModifiedTime);
+            lastModifiedTimeMs = new Long(lastModifiedTime.getTime());
         } catch (AmazonServiceException ase) {
+            // Roll back
+            deleteObject(uploadedKeyName, uploadedVersionId);
             System.err.println(ase.getMessage());
             return 1;
         } catch (AmazonClientException ace) {
+            // Roll back
+            deleteObject(uploadedKeyName, uploadedVersionId);
             System.err.println(ace.getMessage());
             return 1;
         } catch (IndexOutOfBoundsException e) {
+            // Roll back
+            deleteObject(uploadedKeyName, uploadedVersionId);
             System.err.println(e.getMessage());
             return 1;
         }
@@ -378,6 +382,8 @@ public class myDropbox_v2_5730329521 {
         try {
             newFileRecord = mapper.load(FileRecord.class, uploadedKeyName);
         } catch (Exception e) {
+            // Roll back
+            deleteObject(uploadedKeyName, uploadedVersionId);
             System.err.println(e.getMessage());
             return 1;
         }
@@ -385,12 +391,13 @@ public class myDropbox_v2_5730329521 {
         // Create new
         if (newFileRecord == null) {
             newFileRecord = new FileRecord();
-            newFileRecord.setKeyName(uploadResult.getKey());
+            newFileRecord.setKeyName(uploadedKeyName);
         }
 
+        newFileRecord.setVersionId(uploadedVersionId);
         newFileRecord.setOwner(currentUid);
         newFileRecord.setFileSize(fileSize);
-        newFileRecord.setLastModifiedTime(formattedLastModifiedTime);
+        newFileRecord.setLastModifiedTime(lastModifiedTimeMs);
 
         // Add file metadata to the database
         mapper.save(newFileRecord);
@@ -411,11 +418,6 @@ public class myDropbox_v2_5730329521 {
             return 1;
         }
 
-        if (username.compareTo(currentUser) == 0) {
-            System.err.println("You already have an access to this file.");
-            return 1;
-        }
-
         // Check username's existence
         if (!isUsernameExist(mapper, username)) {
             System.err.println("Username '" + username + "' does not exist.");
@@ -429,6 +431,12 @@ public class myDropbox_v2_5730329521 {
         // Prevent sharing a file which a current user does not own
         if (fileRecordRetrieved == null) {
             System.err.println("You are not the owner of this file.");
+            return 1;
+        }
+
+        // Prevent sharing with the owner
+        if (username.compareTo(currentUser) == 0) {
+            System.err.println("You have already owned this file. It's unnecessary to share it with the owner.");
             return 1;
         }
 
@@ -480,7 +488,8 @@ public class myDropbox_v2_5730329521 {
         for (FileRecord file : scanResult) {
             String fileName = file.getKeyName().split("/", 2)[1];
             Long fileSize = file.getFileSize();
-            String lastModifiedTime = file.getLastModifiedTime();
+            Date lastModifiedTime = new Date(file.getLastModifiedTime());
+            String formattedLastModifiedTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ssXXX").format(lastModifiedTime);
             String ownerUid = file.getOwner();
 
             // Get username from cache first
@@ -493,7 +502,7 @@ public class myDropbox_v2_5730329521 {
                     return 1;
                 }
             }
-            System.out.println(fileName + " " + fileSize + " " + lastModifiedTime + " " + ownerUsername);
+            System.out.println(fileName + " " + fileSize + " " + formattedLastModifiedTime + " " + ownerUsername);
         }
 
         return 0;
@@ -544,16 +553,25 @@ public class myDropbox_v2_5730329521 {
 
         List<FileRecord> scanResult = mapper.scan(FileRecord.class, scanExpression);
         String keyName;
+        String versionId;
 
         try {
             keyName = scanResult.get(0).getKeyName();
+            versionId = scanResult.get(0).getVersionId();
         } catch (IndexOutOfBoundsException e) {
             System.err.println("A file '" + fileName + "' whose owner is '" + ownerUsername + "' does not exist.");
             return 1;
         }
 
         try {
-            S3Object o = s3Client.getObject(bucketName, keyName);
+            // S3Object o = s3Client.getObject(bucketName, keyName);
+            S3Object o = s3Client.getObject(
+                    new GetObjectRequest(
+                            bucketName,
+                            keyName,
+                            versionId
+                    )
+            );
             S3ObjectInputStream s3is = o.getObjectContent();
             FileOutputStream fos = new FileOutputStream(new File(fileName));
             byte[] read_buf = new byte[1024];
@@ -591,6 +609,31 @@ public class myDropbox_v2_5730329521 {
 
         currentUser = null;
         currentUid = null;
+        return 0;
+    }
+
+    /**
+     * Delete an object with a specific key in S3 bucket
+     *
+     * @param {String} keyName - A key name of an object.
+     * @param {String} versionId - A version ID of an object.
+     * @return {Integer} An exit code.
+     */
+    public static Integer deleteObject(String keyName, String versionId) {
+        try {
+            s3Client.deleteVersion(
+                    new DeleteVersionRequest(
+                            bucketName,
+                            keyName,
+                            versionId)
+            );
+        } catch (AmazonServiceException ase) {
+            System.out.println(ase.getMessage());
+            return 1;
+        } catch (AmazonClientException ace) {
+            System.out.println(ace.getMessage());
+            return 1;
+        }
         return 0;
     }
 
