@@ -1,6 +1,13 @@
-# myDropbox V.2
+# myDropbox V2
 
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
+
+## Table of Contents
+
+- [Quickstart](#quickstart)
+	- [Amazon Web Service](#amazon-web-service)
+  - [Your Local Machine](#your-local-machine)
+- [License](#license)
 
 ## Quickstart
 
@@ -32,7 +39,7 @@
     - `AmazonS3FullAccess`
     - `AmazonDynamoDBFullAccess`
     
-    After creating, you will get an key ID and secret.
+    After creating, you will get a key ID and secret.
 
 5. Create or update your local AWS `credential` file with the key ID and secret you have got from the previous step.
     ```
