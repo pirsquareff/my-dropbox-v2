@@ -69,7 +69,7 @@ This allows users to store their files in the same S3 bucket without collision e
 
 ![Instance of myDropboxUsers Table](readme/images/my-dropbox-users-table.png)
 
-In Amazon DynamoDB aspect, this table consists of 3 attributes: `username` (String) as a primary partition key, `password` (String), and `uid` (String).
+In Amazon DynamoDB aspect, this table consists of 3 attributes: `username` *(String)* as a primary partition key, `password` *(String)*, and `uid` *(String)*.
 
 A user’s UID is generated from his/her username with the MD5 hashing algorithm. However, there is still little chance that two different strings can have exact MD5 hash value. To avoid this collision, we re-generated new hash value from the previous one till it is unique across all users in the database.
 
@@ -81,7 +81,7 @@ As there is no update, reading this table is eventually consistent.
 
 ![Instance of myDropboxFiles Table](readme/images/my-dropbox-files-table.png)
 
-There are 6 attributes: `key_name` (String), `version_id` (String), `owner` (String), `shared_by` (StringSet), `file_size` (Number), and `last_modified_time` (Number).
+There are 6 attributes: `key_name` *(String)* as a primary partition key, `version_id` *(String)*, `owner` *(String)*, `shared_by` *(StringSet)*, `file_size` *(Number)*, and `last_modified_time` *(Number)*.
 
 After a file is successfully uploaded to S3, its key name along with metadata are also added to myDropboxFiles table. However, if a file is successfully uploaded to S3, but an addition of the file record to myDropboxFiles table is unsuccessful, a rolling back mechanism is triggered by removing that file in S3 as it has never be uploaded.
 
