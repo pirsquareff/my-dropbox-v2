@@ -7,6 +7,8 @@
 - [Quickstart](#quickstart)
 	- [Amazon Web Service](#amazon-web-service)
   - [Your Local Machine](#your-local-machine)
+- [Design](#design)
+  - [File Hierarchy in S3](#file-hierarchy-in-s3)
 - [License](#license)
 
 ## Quickstart
@@ -54,6 +56,16 @@
 2. Import this project to your preferable Java IDE.
 3. In `src/myDropbox_v2_5730329521/myDropbox_v2_5730329521.java` (line 48), change a value of `bucketName` variable to be your S3 bucket's name.
 4. Build and run.
+
+## Design
+
+### File Hierarchy in S3
+The Amazon S3 data model is a flat structure. There is no hierarchy of subfolders; however, you can infer logical hierarchy using key name prefixes and delimiters as the Amazon S3 console does.
+
+So, to separate user’s files, every object’s key name is prefixed with a UID of the user it belongs to.
+This allows users to store their files in the same S3 bucket without collision even two users uploaded files with the same name.
+
+![File Hierarchy in S3](readme/img/file-hierarchy-in-s3.png)
 
 ## License
 
