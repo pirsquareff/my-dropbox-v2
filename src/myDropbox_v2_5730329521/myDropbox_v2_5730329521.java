@@ -613,7 +613,7 @@ public class myDropbox_v2_5730329521 {
         currentUser = null;
         currentUid = null;
 
-        // Clear UID to username hash
+        // Clear cache
         cachedUidToUsername.clear();
         return 0;
     }
@@ -661,14 +661,20 @@ public class myDropbox_v2_5730329521 {
 
     private static Boolean isUidExist(DynamoDBMapper mapper, String uid) {
         HashMap<String, AttributeValue> eav = new HashMap<>();
-        eav.put(":v1", new AttributeValue().withS(uid));
+        eav.put(":val1", new AttributeValue().withS(uid));
 
-        DynamoDBQueryExpression<User> queryExpression = new DynamoDBQueryExpression<User>()
-                .withIndexName("uid-index")
-                .withConsistentRead(false)
-                .withKeyConditionExpression("uid = :v1")
+//        DynamoDBQueryExpression<User> queryExpression = new DynamoDBQueryExpression<User>()
+//                .withIndexName("uid-index")
+//                .withConsistentRead(false)
+//                .withKeyConditionExpression("uid = :v1")
+//                .withExpressionAttributeValues(eav);
+
+
+        DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
+                .withFilterExpression("uid = :val1")
                 .withExpressionAttributeValues(eav);
-        List<User> user = mapper.query(User.class, queryExpression);
+
+        List<User> user = mapper.scan(User.class, scanExpression);
         if (user.isEmpty()) {
             return false;
         }

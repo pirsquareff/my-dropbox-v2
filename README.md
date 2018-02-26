@@ -9,6 +9,8 @@
   - [Your Local Machine](#your-local-machine)
 - [Design](#design)
   - [File Hierarchy in S3](#file-hierarchy-in-s3)
+  - [A User Table in Amazon DynamoDB (myDropboxUsers)](#a-user-table-in-amazon-dynamodb-mydropboxusers)
+  - [A File Table in Amazon DynamoDB (myDropboxFiles)](#a-file-table-in-amazon-dynamodb-mydropboxfiles)
 - [License](#license)
 
 ## Quickstart
@@ -61,7 +63,31 @@ The Amazon S3 data model is a flat structure. There is no hierarchy of subfolder
 So, to separate user’s files, every object’s key name is prefixed with a UID of the user it belongs to.
 This allows users to store their files in the same S3 bucket without collision even two users uploaded files with the same name.
 
-![File Hierarchy in S3](readme/img/file-hierarchy-in-s3.png)
+![File Hierarchy in S3](readme/images/file-hierarchy-in-s3.png)
+
+### A User Table in Amazon DynamoDB (myDropboxUsers)
+
+![Instance of myDropboxUsers Table](readme/images/my-dropbox-users-table.png)
+
+In Amazon DynamoDB aspect, this table consists of 3 attributes: `username` (String) as a primary partition key, `password` (String), and `uid` (String).
+
+A user’s UID is generated from his/her username with the MD5 hashing algorithm. However, there is still little chance that two different strings can have exact MD5 hash value. To avoid this collision, we re-generated new hash value from the previous one till it is unique across all users in the database.
+
+For a security’s purpose, a password is encrypted by the salted PBKDF2 hashing algorithm and is kept in the form of `salt$hashedPassword`.
+
+As there is no update, reading this table is eventually consistent.
+
+### A File Table in Amazon DynamoDB (myDropboxFiles)
+
+![Instance of myDropboxFiles Table](readme/images/my-dropbox-files-table.png)
+
+There are 6 attributes: `key_name` (String), `version_id` (String), `owner` (String), `shared_by` (StringSet), `file_size` (Number), and `last_modified_time` (Number).
+
+After a file is successfully uploaded to S3, its key name along with metadata are also added to myDropboxFiles table. However, if a file is successfully uploaded to S3, but an addition of the file record to myDropboxFiles table is unsuccessful, a rolling back mechanism is triggered by removing that file in S3 as it has never be uploaded.
+
+When a file is shared with another user, UID of that user is added to the `shared_by` set.
+
+All commands use eventually consistent reads, except `get` command which uses strongly consistent reads to make sure that a user will always receive a file with the latest version.
 
 ## License
 

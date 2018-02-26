@@ -27,7 +27,7 @@ public class User {
         this.password = password;
     }
 
-    @DynamoDBIndexHashKey(globalSecondaryIndexName = "uid-index", attributeName = "uid")
+    @DynamoDBAttribute(attributeName = "uid")
     public String getUid() {
         return uid;
     }
