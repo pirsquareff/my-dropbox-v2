@@ -41,6 +41,12 @@
 1. Clone this repository.
 2. Import this project to your preferable Java IDE.
 3. In `src/myDropbox_v2_5730329521/Constant.java` (line 4), change a value of `BUCKET_NAME` variable to be your S3 bucket's name.
+    ```java
+    public final class Constant {
+        public static final String BUCKET_NAME = "your-s3-bucket-name"; // TODO: CHANGE THIS
+        // ...
+    }
+    ```
 4. Build and run.
 
 ## Design
