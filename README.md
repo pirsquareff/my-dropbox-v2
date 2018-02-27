@@ -13,7 +13,7 @@ A command-line client application for storing your personal files on cloud and a
   - [File Hierarchy in S3](#file-hierarchy-in-s3)
   - [A User Table in Amazon DynamoDB (myDropboxUsers)](#a-user-table-in-amazon-dynamodb-mydropboxusers)
   - [A File Table in Amazon DynamoDB (myDropboxFiles)](#a-file-table-in-amazon-dynamodb-mydropboxfiles)
-- [Project Structure](#project-structure)
+- [Project's Structure](#projects-structure)
 - [Application Commands](#application-commands)
 - [License](#license)
 
@@ -87,7 +87,7 @@ When a file is shared with another user, UID of that user is added to the `share
 
 All commands use eventually consistent reads, except `get` command which uses strongly consistent reads to make sure that a user will always receive a file with the latest version.
 
-## Project Structure
+## Project's Structure
 
 This project is composed of 5 classes in total:
 1. **Constant** defines constants for the whole project.
