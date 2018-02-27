@@ -17,7 +17,6 @@ import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBQueryExpression;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -35,17 +34,16 @@ public class myDropbox_v2_5730329521 {
     static AmazonDynamoDB dynamoDBclient = AmazonDynamoDBClientBuilder
             .standard()
             .withCredentials(new ProfileCredentialsProvider())
-            .withRegion("ap-southeast-1")
+            .withRegion(Constant.AMAZON_DYNAMODB_REGION)
             .build();
 
     static AmazonS3 s3Client = AmazonS3ClientBuilder
             .standard()
             .withCredentials(new ProfileCredentialsProvider())
-            .withRegion("ap-southeast-1")
+            .withRegion(Constant.AMAZON_S3_REGION)
             .build();
 
-    // TODO: CHANGE ME
-    static String bucketName = "mydropbox-storage";
+    static String bucketName = Constant.BUCKET_NAME;
 
     private static String currentUser = null;
     private static String currentUid = null;
@@ -662,13 +660,6 @@ public class myDropbox_v2_5730329521 {
     private static Boolean isUidExist(DynamoDBMapper mapper, String uid) {
         HashMap<String, AttributeValue> eav = new HashMap<>();
         eav.put(":val1", new AttributeValue().withS(uid));
-
-//        DynamoDBQueryExpression<User> queryExpression = new DynamoDBQueryExpression<User>()
-//                .withIndexName("uid-index")
-//                .withConsistentRead(false)
-//                .withKeyConditionExpression("uid = :v1")
-//                .withExpressionAttributeValues(eav);
-
 
         DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
                 .withFilterExpression("uid = :val1")
