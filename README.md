@@ -38,7 +38,7 @@
 
 ### Your Local Machine
 
-1. Clone this repository.
+1. Clone [this repository](https://github.com/pirsquareff/my-dropbox-v2) if you do not have the source code.
 2. Import this project to your preferable Java IDE.
 3. In `src/myDropbox_v2_5730329521/Constant.java` (line 4), change a value of `BUCKET_NAME` variable to be your S3 bucket's name.
     ```java
