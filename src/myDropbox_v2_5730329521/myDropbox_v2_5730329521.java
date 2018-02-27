@@ -72,7 +72,7 @@ public class myDropbox_v2_5730329521 {
                     exitCode = createNewUser(mapper, commandChunk[1], commandChunk[2], commandChunk[3]);
                 } catch (ArrayIndexOutOfBoundsException e) {
                     System.err.println("newuser command requires at least 3 arguments. See command arguments below.");
-                    System.err.println("newuser <email> <password> <confirm-password>");
+                    System.err.println("newuser <username> <password> <confirm-password>");
                 }
                 if (exitCode != 0) {
                     System.err.println("Fail to create a new user.");
@@ -85,7 +85,7 @@ public class myDropbox_v2_5730329521 {
                     exitCode = login(mapper, commandChunk[1], commandChunk[2]);
                 } catch (ArrayIndexOutOfBoundsException e) {
                     System.err.println("login command requires at least 2 arguments. See command arguments below.");
-                    System.err.println("login <email> <password>");
+                    System.err.println("login <username> <password>");
                 }
                 if (exitCode != 0) {
                     System.err.println("Fail to login.");
@@ -126,7 +126,7 @@ public class myDropbox_v2_5730329521 {
                     exitCode = get(mapper, fileName, ownerUsername);
                 } catch (ArrayIndexOutOfBoundsException e) {
                     System.err.println("get command requires at least 1 argument. See command arguments below.");
-                    System.err.println("get <file-name>");
+                    System.err.println("get <file-name> [owner-username]");
                 }
                 if (exitCode != 0) {
                     System.err.println("Fail to get a file.");

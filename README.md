@@ -2,6 +2,8 @@
 
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 
+A command-line client application for storing your personal files on cloud and accessing them anywhere, anytime.
+
 ## Table of Contents
 
 - [Quickstart](#quickstart)
@@ -11,6 +13,8 @@
   - [File Hierarchy in S3](#file-hierarchy-in-s3)
   - [A User Table in Amazon DynamoDB (myDropboxUsers)](#a-user-table-in-amazon-dynamodb-mydropboxusers)
   - [A File Table in Amazon DynamoDB (myDropboxFiles)](#a-file-table-in-amazon-dynamodb-mydropboxfiles)
+- [Project Structure](#project-structure)
+- [Application Commands](#application-commands)
 - [License](#license)
 
 ## Quickstart
@@ -82,6 +86,28 @@ After a file is successfully uploaded to S3, its key name along with metadata ar
 When a file is shared with another user, UID of that user is added to the `shared_by` set.
 
 All commands use eventually consistent reads, except `get` command which uses strongly consistent reads to make sure that a user will always receive a file with the latest version.
+
+## Project Structure
+
+This project is composed of 5 classes in total:
+1. **Constant** defines constants for the whole project.
+2. **FileRecord** is an Amazon DynamoDB mapper class of `myDropboxFiles` table.
+3. **User** is an Amazon DynamoDB mapper class of `myDropboxUsers` table.
+4. **PasswordManager** provides methods for verifying and hashing user's password.
+5. **myDropbox_v2_5730329521** serves as the main class to receive and interpret input commands from a user and invoke the corresponding method.
+
+## Application Commands
+
+| Command | Description |
+|---------|----------------------------------------------------------------------------------------------------------------------|
+| newuser | Create a new user with specified username and password<br> **Usage**: `newuser <username> <password> <confirm-password>` |
+| login | Login to the application<br> **Usage**: `login <username> <password>` |
+| logout | Logout from the application<br> **Usage**: `logout` |
+| put | Upload a file to myDropbox<br> **Usage**: `put <file-path>` |
+| view | Display files owned by the user as well as files that others have shared with the user<br> **Usage**: `view` |
+| get | Download a file from myDropbox<br> **Usage**: `get <file-name> [owner-username]` |
+| share | Share a file to another user<br> **Usage**: `share <file-name> <username>` |
+| quit | Stop using the myDropbox application<br> **Usage**: `quit` |
 
 ## License
 
