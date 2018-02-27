@@ -96,6 +96,8 @@ This project is composed of 5 classes in total:
 4. **PasswordManager** provides methods for verifying and hashing user's password.
 5. **myDropbox_v2_5730329521** serves as the main class to receive and interpret input commands from a user and invoke the corresponding method.
 
+Note that all external libraries are in `lib` folder.
+
 ## Application Commands
 
 | Command | Description |
